@@ -1,0 +1,38 @@
+diff --git a/setup.py b/setup.py
+index 510f793..bb6a1ee 100755
+--- a/setup.py
++++ b/setup.py
+@@ -23,6 +23,25 @@ except ImportError:
+     from distutils.core import setup
+ 
+ here = os.path.dirname(__file__)
++
++# Keep a top-level concurrent/ directory out of the build tree -- it shadows the build
++# harness's own stdlib concurrent.futures import (Python 3.11) during manylinux-builder's
++# auditwheel repair step. Done here, rather than as a git rename in the patch that adds it,
++# because some patch appliers silently ignore rename headers and would leave package_dir
++# pointing at a directory that was never created. Every branch below still builds.
++_marker = os.path.join('futures', '_base.py')
++_renamed = os.path.join(here, '_futures_pysrc')
++_upstream = os.path.join(here, 'concurrent')
++if os.path.isfile(os.path.join(_renamed, _marker)):
++    _pkg_dir = '_futures_pysrc'          # a rename-aware applier already moved it
++elif os.path.isfile(os.path.join(_upstream, _marker)):
++    try:
++        os.rename(_upstream, _renamed)
++        _pkg_dir = '_futures_pysrc'
++    except OSError:
++        _pkg_dir = 'concurrent'          # build as upstream; only the shadow mitigation is lost
++else:
++    _pkg_dir = 'concurrent'              # let setuptools report the missing sources
+ with open(os.path.join(here, 'README.rst')) as f:
+     readme = f.read()
+ 
+@@ -36,6 +55,7 @@ setup(name='futures',
+       maintainer_email='alex.gronholm@nextday.fi',
+       url='https://github.com/agronholm/pythonfutures',
+       packages=['concurrent', 'concurrent.futures'],
++      package_dir={'concurrent': _pkg_dir},
+       python_requires='>=2.6, <3',
+       license='PSF',
+       classifiers=['License :: OSI Approved :: Python Software Foundation License',
